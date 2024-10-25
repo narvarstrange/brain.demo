@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "src": "your_main_file.py",  # Replace with your main file name (e.g., main.py, app.py)
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "your_main_file.py" # Same as above
+    }
+  ]
+}
