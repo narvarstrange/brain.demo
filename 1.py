@@ -4,6 +4,8 @@ from pydantic import BaseModel
 import yfinance as yf
 from groq import Groq, GroqError
 import logging
+from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
+from mangum import Mangum  # Import Mangum
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -158,6 +160,24 @@ def generate_insights(request: InsightsRequest):
         return result
     else:
         raise HTTPException(status_code=500, detail="Error fetching financial data.")
+
+# For Vercel deployment:
+app.add_middleware(  # Add CORS middleware directly to the app instance
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins during development, restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Entry point for Vercel Serverless Functions
+@app.get("/")  # Add a root path for health checks
+async def root():
+    return {"message": "API is running"}
+
+
+handler = Mangum(app)  # Create the Mangum handler *outside* the if __name__ == "__main__" block
+
 
 if __name__ == "__main__":
     import uvicorn
