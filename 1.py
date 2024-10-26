@@ -1,11 +1,12 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import yfinance as yf
 from groq import Groq, GroqError
 import logging
-from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
-from mangum import Mangum  # Import Mangum
+from fastapi.middleware.cors import CORSMiddleware
+from mangum import Mangum
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -91,37 +92,38 @@ def generate_graph_data(financial_data):
     
     return graphs
 
-@app.post("/generate_insights", response_model=InsightsResponse)
-def generate_insights(request: InsightsRequest):
-    ticker = request.ticker
-    value_proposition = request.value_proposition
-    
-    if not ticker:
-        raise HTTPException(status_code=400, detail="Ticker value cannot be empty.")
-    if not value_proposition:
-        raise HTTPException(status_code=400, detail="Value proposition cannot be empty.")
-    
-    # Fetch financial data
-    balance_sheet, income_statement, cash_flow = get_financial_data(ticker)
-    
-    if balance_sheet is not None and income_statement is not None and cash_flow is not None:
-        # Convert financial data to dictionary for JSON response
-        financial_data = {
+@app.post("/generate_insights")  # Removed response_model for flexibility
+async def generate_insights(request: Request):
+    try:
+        req_body = await request.json()
+        print(jsonable_encoder(req_body)) # Print request body for debugging
+        ticker = req_body.get("ticker")
+        value_proposition = req_body.get("value_proposition")
+
+        if not ticker:
+            raise ValueError("Ticker value cannot be empty.")
+        if not value_proposition:
+            raise ValueError("Value proposition cannot be empty.")
+
+        balance_sheet, income_statement, cash_flow = get_financial_data(ticker)
+        stock = yf.Ticker(ticker) # Get the stock object again
+
+        financial_data = {  # Create dictionary for structured data
             "balance_sheet": balance_sheet.to_dict(),
             "income_statement": income_statement.to_dict(),
-            "cash_flow": cash_flow.to_dict()
+            "cash_flow": cash_flow.to_dict(),
         }
-        
-        # Generate insights
-        sections = [
-            "Earnings Data Analysis", 
-            "Financial Data Analysis", 
-            "Brainstorm Values", 
+
+        financial_data_raw = financial_data.copy()  # Create the raw data dictionary
+        financial_data_raw["info"] = stock.info  # Add the raw info
+
+        sections = [ # Define sections for analysis (same as before)
+            "Earnings Data Analysis",
+            "Financial Data Analysis",
+            "Brainstorm Values",
             "Financial Prediction",
-            "Key Competitors"  # Add a section for key competitors
+            "Key Competitors"
         ]
-        
-        # Add the value proposition as a new section
         sections.append(value_proposition)
 
         insights = {}
@@ -153,13 +155,19 @@ def generate_insights(request: InsightsRequest):
         # Combine financial data, insights, and graphs into a single dictionary
         result = {
             "financial_data": financial_data,
+            "financial_data_raw": financial_data_raw,
             "insights": insights,
             "graphs": graphs
-        }
+         }
+
+        return JSONResponse(content=result)
         
-        return result
-    else:
-        raise HTTPException(status_code=500, detail="Error fetching financial data.")
+
+    except ValueError as e:   # <--- Corrected indentation
+        return JSONResponse(content={"error": str(e)}, status_code=400)
+    except Exception as e:   # <--- Corrected indentation
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
 
 # For Vercel deployment:
 app.add_middleware(  # Add CORS middleware directly to the app instance
