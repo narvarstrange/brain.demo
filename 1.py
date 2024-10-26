@@ -1,11 +1,13 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 import yfinance as yf
 from groq import Groq, GroqError
 import logging
-from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
-from mangum import Mangum  # Import Mangum
+from fastapi.middleware.cors import CORSMiddleware
+from mangum import Mangum
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,9 +20,7 @@ api_key = os.getenv("GROQ_API_KEY", "gsk_N1yjo8LriaZv9jBfMv5KWGdyb3FYZPrBIV74SYK
 if not api_key:
     raise ValueError("The GROQ_API_KEY environment variable is not set.")
 
-client = Groq(
-    api_key=api_key,
-)
+client = Groq(api_key=api_key)
 
 # Define Pydantic models for request and response
 class InsightsRequest(BaseModel):
@@ -50,7 +50,6 @@ def get_financial_data(ticker):
         income_statement = stock.financials
         cash_flow = stock.cashflow
         
-        # Check if the financial data is not empty
         if balance_sheet.empty or income_statement.empty or cash_flow.empty:
             raise ValueError("Invalid ticker symbol or no data available.")
         
@@ -62,12 +61,7 @@ def get_financial_data(ticker):
 def generate_insights_from_groq(prompt_text):
     try:
         chat_completion = client.chat.completions.create(
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt_text,
-                }
-            ],
+            messages=[{"role": "user", "content": prompt_text}],
             model="llama3-8b-8192",
         )
         return chat_completion.choices[0].message.content
@@ -101,37 +95,34 @@ async def generate_insights(request: Request):
         value_proposition = req_body.get("value_proposition")
 
         if not ticker:
-            raise ValueError("Ticker value cannot be empty.")  # Raise an exception
+            raise ValueError("Ticker value cannot be empty.")
         if not value_proposition:
-            raise ValueError("Value proposition cannot be empty.")  # Raise an exception
-    
-    # Fetch financial data
-    balance_sheet, income_statement, cash_flow = get_financial_data(ticker)
-    
-    if balance_sheet is not None and income_statement is not None and cash_flow is not None:
+            raise ValueError("Value proposition cannot be empty.")
+
+        # Fetch financial data
+        balance_sheet, income_statement, cash_flow = get_financial_data(ticker)
+
         # Convert financial data to dictionary for JSON response
         financial_data = {
             "balance_sheet": balance_sheet.to_dict(),
             "income_statement": income_statement.to_dict(),
             "cash_flow": cash_flow.to_dict()
         }
-        
+
         # Generate insights
         sections = [
             "Earnings Data Analysis", 
             "Financial Data Analysis", 
             "Brainstorm Values", 
             "Financial Prediction",
-            "Key Competitors"  # Add a section for key competitors
+            "Key Competitors"
         ]
         
-        # Add the value proposition as a new section
         sections.append(value_proposition)
 
         insights = {}
         for section in sections:
             if section == "Key Competitors":
-                # Prompt specific to key competitors section
                 prompt = f"""
                 Section: {section}
                 Company: {ticker}   
@@ -140,7 +131,6 @@ async def generate_insights(request: Request):
                 Identify and analyze key competitors of the company.
                 """
             else:
-                # Generic prompt for other sections
                 prompt = f"""
                 Section: {section}
                 Company: {ticker}
@@ -154,39 +144,36 @@ async def generate_insights(request: Request):
         # Generate graph data
         graphs = generate_graph_data(financial_data)
         
-        # Combine financial data, insights, and graphs into a single dictionary
-        result = {  # Construct your response as before
+        result = {
             "financial_data": financial_data,
-            "financial_data_raw": financial_data_raw,
             "insights": insights,
             "graphs": graphs,
         }
         
-         print(f"Response Data: {jsonable_encoder(result)}") # Print the response data
-
+        print(f"Response Data: {jsonable_encoder(result)}")
         return JSONResponse(content=result)
 
-    except ValueError as e:  # Handle the ValueError
+    except ValueError as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
-    except Exception as e: # Handle any other exception
+    except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
-# For Vercel deployment:
-app.add_middleware(  # Add CORS middleware directly to the app instance
+
+# CORS configuration
+app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins during development, restrict in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Entry point for Vercel Serverless Functions
-@app.get("/")  # Add a root path for health checks
+# Entry point for health checks
+@app.get("/")
 async def root():
     return {"message": "API is running"}
 
-
-handler = Mangum(app)  # Create the Mangum handler *outside* the if __name__ == "__main__" block
-
+# Create the Mangum handler for AWS Lambda
+handler = Mangum(app)
 
 if __name__ == "__main__":
     import uvicorn
