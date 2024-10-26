@@ -95,15 +95,15 @@ def generate_graph_data(financial_data):
 async def generate_insights(request: Request):
     try:
         req_body = await request.json()
-        print(f"Received Request Body: {jsonable_encoder(req_body)}") # Print the received data
+        print(f"Received Request Body: {jsonable_encoder(req_body)}")
 
         ticker = req_body.get("ticker")
         value_proposition = req_body.get("value_proposition")
-    
-    if not ticker:
-        raise HTTPException(status_code=400, detail="Ticker value cannot be empty.")
-    if not value_proposition:
-        raise HTTPException(status_code=400, detail="Value proposition cannot be empty.")
+
+        if not ticker:
+            raise ValueError("Ticker value cannot be empty.")  # Raise an exception
+        if not value_proposition:
+            raise ValueError("Value proposition cannot be empty.")  # Raise an exception
     
     # Fetch financial data
     balance_sheet, income_statement, cash_flow = get_financial_data(ticker)
@@ -166,11 +166,10 @@ async def generate_insights(request: Request):
 
         return JSONResponse(content=result)
 
-    except ValueError as e:
+    except ValueError as e:  # Handle the ValueError
         return JSONResponse(content={"error": str(e)}, status_code=400)
-    except Exception as e:
+    except Exception as e: # Handle any other exception
         return JSONResponse(content={"error": str(e)}, status_code=500)
-
 # For Vercel deployment:
 app.add_middleware(  # Add CORS middleware directly to the app instance
     CORSMiddleware,
