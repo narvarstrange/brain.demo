@@ -91,10 +91,14 @@ def generate_graph_data(financial_data):
     
     return graphs
 
-@app.post("/generate_insights", response_model=InsightsResponse)
-def generate_insights(request: InsightsRequest):
-    ticker = request.ticker
-    value_proposition = request.value_proposition
+@app.post("/generate_insights")
+async def generate_insights(request: Request):
+    try:
+        req_body = await request.json()
+        print(f"Received Request Body: {jsonable_encoder(req_body)}") # Print the received data
+
+        ticker = req_body.get("ticker")
+        value_proposition = req_body.get("value_proposition")
     
     if not ticker:
         raise HTTPException(status_code=400, detail="Ticker value cannot be empty.")
@@ -151,15 +155,21 @@ def generate_insights(request: InsightsRequest):
         graphs = generate_graph_data(financial_data)
         
         # Combine financial data, insights, and graphs into a single dictionary
-        result = {
+        result = {  # Construct your response as before
             "financial_data": financial_data,
+            "financial_data_raw": financial_data_raw,
             "insights": insights,
-            "graphs": graphs
+            "graphs": graphs,
         }
         
-        return result
-    else:
-        raise HTTPException(status_code=500, detail="Error fetching financial data.")
+         print(f"Response Data: {jsonable_encoder(result)}") # Print the response data
+
+        return JSONResponse(content=result)
+
+    except ValueError as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 # For Vercel deployment:
 app.add_middleware(  # Add CORS middleware directly to the app instance
