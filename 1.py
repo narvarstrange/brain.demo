@@ -7,14 +7,12 @@ from groq import Groq, GroqError
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
-from fastapi.encoders import jsonable_encoder 
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
-
 
 # Initialize Groq client with API key from environment variable
 api_key = os.getenv("GROQ_API_KEY", "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")
@@ -94,11 +92,11 @@ def generate_graph_data(financial_data):
     
     return graphs
 
-@app.post("/generate_insights")
+@app.post("/generate_insights")  # Removed response_model for flexibility
 async def generate_insights(request: Request):
     try:
         req_body = await request.json()
-        print(jsonable_encoder(req_body))  # Print for debugging
+        print(jsonable_encoder(req_body)) # Print request body for debugging
         ticker = req_body.get("ticker")
         value_proposition = req_body.get("value_proposition")
 
@@ -165,9 +163,9 @@ async def generate_insights(request: Request):
         return JSONResponse(content=result)
         
 
-     except ValueError as e:
+    except ValueError as e:   # <--- Corrected indentation
         return JSONResponse(content={"error": str(e)}, status_code=400)
-    except Exception as e:
+    except Exception as e:   # <--- Corrected indentation
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
