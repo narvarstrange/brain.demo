@@ -1,11 +1,13 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import yfinance as yf
 from groq import Groq, GroqError
 import logging
-from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
-from mangum import Mangum  # Import Mangum
+from fastapi.middleware.cors import CORSMiddleware
+from mangum import Mangum
+from fastapi.encoders import jsonable_encoder
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -101,19 +103,24 @@ async def generate_insights(request: Request):
         value_proposition = req_body.get("value_proposition")
 
         if not ticker:
-            raise ValueError("Ticker value cannot be empty.")  # Raise an exception
+            raise ValueError("Ticker value cannot be empty.")
         if not value_proposition:
-            raise ValueError("Value proposition cannot be empty.")  # Raise an exception
-    
-    # Fetch financial data
-    balance_sheet, income_statement, cash_flow = get_financial_data(ticker)
-    
-    if balance_sheet is not None and income_statement is not None and cash_flow is not None:
-        # Convert financial data to dictionary for JSON response
+            raise ValueError("Value proposition cannot be empty.")
+
+        balance_sheet, income_statement, cash_flow = get_financial_data(ticker)
+        stock = yf.Ticker(ticker)  # Get stock info for raw data
+
         financial_data = {
             "balance_sheet": balance_sheet.to_dict(),
             "income_statement": income_statement.to_dict(),
-            "cash_flow": cash_flow.to_dict()
+            "cash_flow": cash_flow.to_dict(),
+        }
+
+        financial_data_raw = {  # Include info in raw data
+            "balance_sheet": balance_sheet.to_dict('records'),  # Use 'records' for list of dicts
+            "income_statement": income_statement.to_dict('records'),
+            "cash_flow": cash_flow.to_dict('records'),
+            "info": stock.info, # Include the raw info as you had initially
         }
         
         # Generate insights
@@ -155,21 +162,22 @@ async def generate_insights(request: Request):
         graphs = generate_graph_data(financial_data)
         
         # Combine financial data, insights, and graphs into a single dictionary
-        result = {  # Construct your response as before
+        result = {
             "financial_data": financial_data,
-            "financial_data_raw": financial_data_raw,
+            "financial_data_raw": financial_data_raw,  # Include raw data in the response
             "insights": insights,
             "graphs": graphs,
         }
-        
-         print(f"Response Data: {jsonable_encoder(result)}") # Print the response data
+
+        print(f"Response Data: {jsonable_encoder(result)}")
 
         return JSONResponse(content=result)
 
-    except ValueError as e:  # Handle the ValueError
+    except ValueError as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
-    except Exception as e: # Handle any other exception
+    except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
 # For Vercel deployment:
 app.add_middleware(  # Add CORS middleware directly to the app instance
     CORSMiddleware,
