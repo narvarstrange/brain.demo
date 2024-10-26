@@ -1,12 +1,11 @@
+import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import yfinance as yf
 from groq import Groq, GroqError
-import os
 import logging
-from fastapi.middleware.cors import CORSMiddleware
-from mangum import Mangum
-import json  # Add json for pretty printing
+from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
+from mangum import Mangum  # Import Mangum
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -157,29 +156,28 @@ def generate_insights(request: InsightsRequest):
             "insights": insights,
             "graphs": graphs
         }
-
-        # Log and print the result here
-        logger.info("Generated Insights Data: %s", json.dumps(result, indent=4))
-        print("Generated Insights Data:", json.dumps(result, indent=4))
         
         return result
     else:
         raise HTTPException(status_code=500, detail="Error fetching financial data.")
 
-# For CORS and Vercel deployment
-app.add_middleware(
+# For Vercel deployment:
+app.add_middleware(  # Add CORS middleware directly to the app instance
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins during development, restrict in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get("/")
+# Entry point for Vercel Serverless Functions
+@app.get("/")  # Add a root path for health checks
 async def root():
     return {"message": "API is running"}
 
-handler = Mangum(app)
+
+handler = Mangum(app)  # Create the Mangum handler *outside* the if __name__ == "__main__" block
+
 
 if __name__ == "__main__":
     import uvicorn
